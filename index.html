@@ -4,47 +4,329 @@
     <meta charset="UTF-8">
     <title>Space Fighter</title>
     <link rel="stylesheet" href="style.css">
-    <script src="script.js" type="module" defer></script>
+    <script>
+	</script>
 </head>
 <body>
     <h1>Space Fighter</h1>
     <canvas id="canvas" width="1000" height="500"></canvas> 
-    <script>      
-	// <![CDATA[  <-- For SVG support
-	if ('WebSocket' in window) {
-		(function () {
-			function refreshCSS() {
-				var sheets = [].slice.call(document.getElementsByTagName("link"));
-				var head = document.getElementsByTagName("head")[0];
-				for (var i = 0; i < sheets.length; ++i) {
-					var elem = sheets[i];
-					var parent = elem.parentElement || head;
-					parent.removeChild(elem);
-					var rel = elem.rel;
-					if (elem.href && typeof rel != "string" || rel.length == 0 || rel.toLowerCase() == "stylesheet") {
-						var url = elem.href.replace(/(&|\?)_cacheOverride=\d+/, '');
-						elem.href = url + (url.indexOf('?') >= 0 ? '&' : '?') + '_cacheOverride=' + (new Date().valueOf());
+    <script>class Star {
+		constructor(x, y, size, distance){
+			this.x = x;
+			this.y = y;
+			this.size = size;
+			this.distance = distance
+		}
+	
+		update(elapsed) {
+			this.x -= 40 * elapsed 
+		}
+	
+		draw(ctx) {
+			ctx.save();
+			ctx.fillStyle = "white";
+			ctx.translate(this.x/this.distance, this.y);
+			ctx.beginPath();
+			ctx.arc(0, 0, this.size/(this.distance + 1), 0, Math.PI * 2)
+			ctx.fill();
+			ctx.restore();
+		}
+		
+	}
+		class Bullet {
+		constructor(x, y, speed, damage, colour){
+			this.x = x
+			this.y = y
+			this.speed = speed
+			this.damage = damage
+	
+			this.width = 20;
+			this.height = 5;
+			this.colour = colour
+		}
+		update(elapsed){   
+			this.x += elapsed*this.speed
+	
+		}
+		draw(ctx){                                                          
+			ctx.fillStyle = this.colour;
+			ctx.fillRect(this.x, this.y, this.width, this.height);
+		}
+	
+		collision(sprite){                                   // Collision detection method as found at 
+			if(this.x < sprite.x + sprite.size &&            //https://developer.mozilla.org/en-US/docs/Games/Techniques/2D_collision_detection
+				this.x + this.width > sprite.x &&
+				this.y < sprite.y + sprite.size &&
+				this.y + this.height > sprite.y){
+					sprite.takeDamage(this.damage);
+					return true;
+				}
+			return false;
+		}
+	}
+	
+	
+		class BulletController{
+		bullets = [];
+		fireTimer = 0;
+	
+		fire(x, y, speed, damage, rate, colour) {                           //here we add a timer for each shooter based on the parameters previously set 
+			if(this.fireTimer <= 0){                                        //on the corresponding class, for each of these an array exists, and bullets are added to this array
+				this.bullets.push(new Bullet(x, y, speed, damage, colour))  //at a frequency based on the rate parameter
+				this.fireTimer = rate;
+			}
+			this.fireTimer --;
+		}
+		update(elapsed) {                                                   //checks each bullet if it's off screen and deletes it using the "isBulletOffScreen function defined below"
+			this.bullets.forEach((bullet) => {
+				if(this.isBulletOffScreen(bullet)){
+					const index = this.bullets.indexOf(bullet);
+					this.bullets.splice(index, 1);
+				}
+				bullet.update(elapsed);
+				});
+		}
+		draw(ctx){
+			this.bullets.forEach((bullet) => bullet.draw(ctx));
+		}
+	
+		isBulletOffScreen(bullet){
+			return bullet.x >= canvas.width + bullet.width || bullet.x <= 0 - bullet.width;
+		}
+	
+		collision(sprite) {                                                  //uses the some method to check if ANY of the bullets in the array are colliding with a sprite, it then deletes that bullet
+			return this.bullets.some(bullet=>{
+				if(bullet.collision(sprite)){
+					this.bullets.splice(this.bullets.indexOf(bullet),1);
+					return true;
+				}
+				return false;
+			});
+		}
+	}
+	
+		class Player{ 
+		constructor(x, y, size, bulletController){
+			this.x = x;
+			this.y = y;
+			this.health = 5;
+			this.size = size;           //because the image is a perfect square, there is no need for height and width
+			this.img = new Image();
+			this.img.src = "ship.png";
+			this.bulletController = bulletController;
+			this.speed = 200
+		}
+		
+		update(elapsed){
+			this.speed = 200
+			if(keys.Space){this.speed = 100}        //player is slowed when holding spacebar
+			this.x -= (keys.ArrowLeft - keys.ArrowRight) * elapsed * this.speed 
+			this.y -= (keys.ArrowUp - keys.ArrowDown) * elapsed* this.speed
+			this.boundsCheck()
+			this.fire();
+			console.log(this.health)
+		}
+	
+		draw(ctx) {
+				ctx.save();
+				ctx.translate(this.x, this.y);
+				ctx.shadowColor = "green";
+				ctx.shadowBlur = 10;
+				ctx.drawImage(this.img, 0, 0, this.size, this.size);
+				ctx.restore();
+			}
+	
+		fire() {
+			if(keys.Space){                  //fires bullets (green to represent the player)
+				const speed = 500;
+				const rate = 20;                //responsible for how quickly the player fires
+				const damage = 1;
+				const bulletX = this.x + this.size/2;       //these exist so the bullets are fired from the middle of the player's sprite
+				const bulletY = this.y + this.size/2;
+				const colour = "green"
+				this.bulletController.fire(bulletX, bulletY, speed, damage, rate, colour)
+			}
+		}
+		takeDamage(damage) {
+			this.health -= damage
+		}
+		boundsCheck() {                 //makes sure the player does not cross the intended boundaries
+			if(this.x< 0){
+				this.x = 0
+			}
+			if(this.x > canvas.width/2 - this.size){
+				this.x = canvas.width/2 - this.size
+			}
+			if(this.y<0){
+				this.y = 0
+			}
+			if(this.y> canvas.height - this.size){
+				this.y= canvas.height - this.size
+			}
+		}
+		
+	}
+	const keys = {
+		ArrowUp: false,
+		ArrowDown: false,
+		ArrowLeft: false,
+		ArrowRight: false,
+		Space: false
+	}
+	
+	window.addEventListener('keydown', ev => {
+		keys[ev.code] = true;
+		});
+	 
+	 window.addEventListener('keyup', ev => {
+		 keys[ev.code] = false;
+		});
+	
+	
+		class Enemy{
+		constructor(x, y, size, health){
+			this.x = x;
+			this.y = y;
+			this.size = size;
+			this.health = health;
+			this.img = new Image();
+			this.img.src = "enemyShip.png";
+			this.bulletController = new BulletController()
+			
+		}
+	
+		update(){                                       
+			this.fire();
+		}
+	
+		fire(){                                                     //because the enemies' bullets behave essentially the same as the player'
+			const speed = -300;                                     //means that reversing the speed and changing the colour will work perfectly
+			const rate = 100 + Math.random()*50;                    //the enemies' rate of fire is given a more random speed to add variety and difficulty
+			const damage = 1;
+			const bulletX = this.x - this.size/2;
+			const bulletY = this.y + this.size/2;
+			const colour = "red";
+			this.bulletController.fire(bulletX, bulletY, speed, damage, rate, colour);
+		}
+	
+		draw(ctx) {
+			ctx.save();
+			ctx.shadowColor = "red";    
+			ctx.shadowBlur = 10;
+			ctx.drawImage(this.img, this.x, this.y, this.size, this.size);
+			ctx.fillStyle = "red"
+			ctx.fillRect(this.x, this.y - 15, this.health * 5, 5)       //healthbar displayed on top of each enemy
+			ctx.restore();
+		}
+	
+		takeDamage(damage){
+			this.health -= damage;
+		}
+	}
+	
+		class Scene {
+		constructor(nStars, canvas) {
+			this.stars = Array.from({length: nStars}, () =>{        //initialises the starfield
+				return new Star(
+					(Math.random() * canvas.width),
+					Math.random() * canvas.height,
+					1 + Math.random(),
+					Math.random()
+				);
+			});
+			this.bulletController = new BulletController();         
+			this.player = new Player(0, 0, 50, this.bulletController);   
+			this.enemies = [                                         //initialises enemies
+				new Enemy(850, 50, 50, 10),
+				new Enemy(810, 150, 50, 10),
+				new Enemy(890, 200, 100, 20),
+				new Enemy(810, 300, 50, 10),
+				new Enemy(850, 400, 50, 10)
+				]
+			this.status = true;                                         //state of the game 
+	
+		}
+	
+		update(elapsed) {                                               //updates starfield, bullets, enemies, player, and collisions
+			this.starUpdate(elapsed) 
+			this.bulletController.update(elapsed);
+			this.enemies.forEach(bullet => {bullet.bulletController.update(elapsed)})
+			this.enemiesUpdate(elapsed);
+			this.player.update(elapsed);
+			this.playerCollision();
+		}
+	
+		draw(ctx) {                                                        //draws starfield, bullets, enemies and player
+			ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+			this.stars.forEach(star => {star.draw(ctx)});
+			this.bulletController.draw(ctx);
+			this.enemies.forEach(bullet => {bullet.bulletController.draw(ctx)})
+			this.player.draw(ctx);
+			this.enemies.forEach((enemy) => {enemy.draw(ctx)});
+		}
+	
+	
+		starUpdate(elapsed){                                                //starfield randomisation and handling of out of bounds stars, instead of being deleted, they are given
+			this.stars.forEach(star => {                                    //new random parameters and placed outside of the canvas along the x direction
+				star.update(elapsed);
+				if(star.x < -star.size*2){
+					star.x = canvas.width + (Math.random() * canvas.width),
+					star.y = Math.random() * canvas.height,
+					star.size = 1 + Math.random() * 2,
+					star.distance = Math.random()}
+			});
+		}
+		enemiesUpdate(){                                                    //checks for enemies health, if it equals or is less than 0 then the enemy is deleted
+			this.enemies.forEach((enemy) =>{
+				enemy.update();
+				if(this.bulletController.collision(enemy)){
+					if(enemy.health <= 0){
+						const index = this.enemies.indexOf(enemy)
+						this.enemies.splice(index, 1);
 					}
-					parent.appendChild(elem);
+				}
+			})
+		}
+	
+		playerCollision(){                                                  //checks for collisions only for the player and changes the game status if player health drops to 0
+			this.enemies.forEach((enemy) =>{
+				if(enemy.bulletController.collision(this.player)){
+					if(this.player.health <= 0){
+						this.status = false;
+					}
+				}
+			})
+		}
+		winCheck(){                                                         //if all the enemies in the array are removed then ends the game with a victory
+			if(this.enemies.length == 0){
+				return false;
+			}
+			return true;
+		}
+	}
+	
+		const ctx = canvas.getContext("2d");
+			const scene = new Scene(700, canvas);  //the first argument represents the amount of stars generated for the background
+			
+			let p;
+			
+			function frame(ts) {
+				const elapsed = ts - p || 0;
+				scene.update(elapsed / 1000);
+				scene.draw(ctx);
+				p = ts;
+				if(!scene.winCheck()){
+					ctx.font = "30pt Arial"
+					ctx.fillText("YOU WIN", canvas.width/2 - 70, canvas.height/2, canvas.width)
+					}
+				if(!scene.status){
+					ctx.font = "30pt Arial"
+					ctx.fillText("YOU LOSE", canvas.width/2 - 70, canvas.height/2, canvas.width)
+				}
+				if(scene.status){
+					requestAnimationFrame(frame);
 				}
 			}
-			var protocol = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
-			var address = protocol + window.location.host + window.location.pathname + '/ws';
-			var socket = new WebSocket(address);
-			socket.onmessage = function (msg) {
-				if (msg.data == 'reload') window.location.reload();
-				else if (msg.data == 'refreshcss') refreshCSS();
-			};
-			if (sessionStorage && !sessionStorage.getItem('IsThisFirstTime_Log_From_LiveServer')) {
-				console.log('Live reload enabled.');
-				sessionStorage.setItem('IsThisFirstTime_Log_From_LiveServer', true);
-			}
-		})();
-	}
-	else {
-		console.error('Upgrade your browser. This Browser is NOT supported WebSocket for Live-Reloading.');
-	}
-	// ]]>
-    </script>
+			requestAnimationFrame(frame);</script>
 </body>
 </html>
